@@ -1,0 +1,30 @@
+# Secrets — NEVER commit
+*.jks
+*.keystore
+keystore.properties
+config.json
+accounts.json
+watchdog.json
+tenants/
+*.apk
+
+# Build artifacts
+build/
+app/build/
+.gradle/
+*.iml
+
+# Machine-specific
+local.properties
+com.androiduse.watchdog.plist
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/

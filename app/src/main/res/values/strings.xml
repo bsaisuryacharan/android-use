@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Android Use</string>
+    <string name="service_label">Android Use control</string>
+    <string name="service_description">Lets your assistant read the screen and tap on your behalf, so it can help you operate this phone. You can stop it at any time from the notification.</string>
+</resources>

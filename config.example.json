@@ -1,0 +1,14 @@
+{
+  "_comment": "Copy to ~/.android-use/config.json. Only apps listed here can be opened.",
+  "allowed_packages": [
+    "com.android.settings",
+    "com.android.chrome",
+    "com.google.android.youtube",
+    "com.android.deskclock",
+    "com.google.android.apps.maps",
+    "com.google.android.contacts",
+    "com.google.android.apps.photos"
+  ],
+  "_allow_all_apps": "Set to true to disable the allowlist entirely. Not recommended: the phone probably has banking and payment apps on it.",
+  "allow_all_apps": false
+}
