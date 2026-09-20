@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Android Use — Computer-Use for Android Phones via Claude & MCP</title>
+<meta name="description" content="Android Use lets Claude see and control a real Android phone — tap, type, navigate settings, launch apps — over cellular, from anywhere. Open-source MCP server that reads the accessibility tree instead of guessing pixels. The mobile counterpart to computer-use.">
+<meta name="keywords" content="android use, computer use android, claude android, MCP server android, control android with AI, android automation AI, model context protocol android, claude mobile control, remote android control, AI phone assistant, accessibility service automation, android LLM agent">
+<meta name="author" content="bsaisuryacharan">
+<link rel="canonical" href="https://bsaisuryacharan.github.io/android-use/">
+
+<!-- Open Graph / social preview -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="Android Use — Computer-Use for Android, via Claude & MCP">
+<meta property="og:description" content="Let Claude see and control a real Android phone over cellular. Reads the accessibility tree, taps by index, types any language. Open source.">
+<meta property="og:image" content="https://bsaisuryacharan.github.io/android-use/demo.gif">
+<meta property="og:url" content="https://bsaisuryacharan.github.io/android-use/">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Android Use — Computer-Use for Android">
+<meta name="twitter:description" content="Claude sees and controls a real Android phone over cellular, via MCP. Open source.">
+<meta name="twitter:image" content="https://bsaisuryacharan.github.io/android-use/demo.gif">
+
+<!-- Structured data for rich Google results -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Android Use",
+  "applicationCategory": "DeveloperApplication",
+  "operatingSystem": "Android, macOS, Linux, Windows",
+  "description": "Open-source MCP server that lets Claude see and control a real Android phone over cellular — the mobile counterpart to computer-use.",
+  "url": "https://github.com/bsaisuryacharan/android-use",
+  "author": {"@type": "Person", "name": "bsaisuryacharan"},
+  "license": "https://www.apache.org/licenses/LICENSE-2.0",
+  "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"}
+}
+</script>
+<style>
+  :root{--bg:#0d0d0f;--card:#17171a;--txt:#eaeaea;--mut:#9a9aa2;--acc:#d2895f;--line:#2a2a30}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  .wrap{max-width:860px;margin:0 auto;padding:56px 20px}
+  h1{font-size:44px;margin:0 0 8px;letter-spacing:-.5px}
+  .tag{color:var(--acc);font-weight:600}
+  .lede{font-size:20px;color:var(--mut);margin:0 0 28px}
+  .cta{display:inline-block;background:var(--acc);color:#111;font-weight:700;padding:12px 22px;border-radius:10px;text-decoration:none;margin:4px 8px 4px 0}
+  .cta.ghost{background:transparent;color:var(--txt);border:1px solid var(--line)}
+  img.demo{width:100%;border:1px solid var(--line);border-radius:12px;margin:28px 0}
+  h2{font-size:26px;margin:44px 0 12px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px}
+  .card h3{margin:0 0 6px;font-size:17px}
+  .card p{margin:0;color:var(--mut);font-size:15px}
+  code{background:#000;padding:2px 7px;border-radius:5px;font-size:14px;color:#bcd}
+  pre{background:#000;border:1px solid var(--line);border-radius:10px;padding:16px;overflow:auto}
+  footer{color:var(--mut);margin-top:56px;border-top:1px solid var(--line);padding-top:20px;font-size:14px}
+  a{color:var(--acc)}
+  @media(max-width:640px){.grid{grid-template-columns:1fr}h1{font-size:34px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Android Use</h1>
+  <p class="lede"><span class="tag">Computer-use, for Android.</span> Let Claude
+  see and operate a real Android phone — tap, type, navigate settings, launch
+  apps — over cellular, from anywhere. Open source, via
+  <a href="https://modelcontextprotocol.io">MCP</a>.</p>
+
+  <a class="cta" href="https://github.com/bsaisuryacharan/android-use">⭐ Star on GitHub</a>
+  <a class="cta ghost" href="https://github.com/bsaisuryacharan/android-use#quick-start-adb-2-minutes">Quick start</a>
+
+  <img class="demo" src="demo.gif" alt="Claude reading an Android phone's screen and turning off an alarm by tapping the element by index">
+
+  <h2>Why it's different</h2>
+  <div class="grid">
+    <div class="card"><h3>Accessibility tree, not pixels</h3><p>It reads the phone's real UI tree and acts on labelled elements by index — far more reliable than screenshotting and guessing coordinates.</p></div>
+    <div class="card"><h3>Works over cellular</h3><p>Cellular + Tailscale means the phone needs no Wi-Fi and no cable. Help someone with their phone from another city.</p></div>
+    <div class="card"><h3>Any language</h3><p>Types Telugu, Hindi, emoji — anything — via ACTION_SET_TEXT, which <code>adb input text</code> can't do.</p></div>
+    <div class="card"><h3>Owner always in control</h3><p>On-device app allowlist, time-boxed grants, an always-on notification with a Stop button. No lock-screen bypass.</p></div>
+  </div>
+
+  <h2>Try it in 2 minutes</h2>
+  <pre>git clone https://github.com/bsaisuryacharan/android-use
+cd android-use && ./install.sh
+# enable USB debugging on the phone, then just talk to Claude:
+#   "turn off my 7am alarm"   ·   "why isn't my internet working?"</pre>
+
+  <p>Built for the people who find phones hard — and for anyone who wants to see
+  what an AI agent can do with a real device.
+  <a href="https://github.com/bsaisuryacharan/android-use">Read the code &amp;
+  the honest security model →</a></p>
+
+  <footer>
+    Open source (Apache-2.0). Not affiliated with Google or Anthropic.
+    A remote-phone-control tool — please read the
+    <a href="https://github.com/bsaisuryacharan/android-use/blob/main/SECURITY.md">security &amp; responsible-use policy</a>.
+  </footer>
+</div>
+</body>
+</html>
