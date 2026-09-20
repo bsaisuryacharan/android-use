@@ -9,6 +9,8 @@ Think of it as the mobile counterpart to computer-use: instead of pixels and
 blind coordinate-guessing, it reads the phone's **accessibility tree** and hands
 the model a numbered list of what's actually on screen. The model acts by index.
 
+![Android Use driving a phone](assets/demo.gif)
+
 ```
 App: com.android.deskclock
   [0] More settings <Button> @975,437
