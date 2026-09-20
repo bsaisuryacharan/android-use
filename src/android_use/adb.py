@@ -27,13 +27,21 @@ def _find_adb() -> str:
     ):
         if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
             return candidate
-    raise AdbError(
-        "adb not found. Install Android platform-tools, or set ADB_PATH to the adb binary."
-    )
+    return ""  # not found — resolved lazily so importing the package never fails
 
 
 ADB = _find_adb()
 SERIAL = os.environ.get("ANDROID_SERIAL")
+
+
+def _require_adb() -> str:
+    """Return the adb path, or raise only when adb is actually needed."""
+    if ADB:
+        return ADB
+    raise AdbError(
+        "adb not found. Install Android platform-tools, or set ADB_PATH to the "
+        "adb binary. (Not needed for the companion-app transport.)"
+    )
 
 
 @dataclass
@@ -48,7 +56,7 @@ class Device:
 
 
 def _base_cmd() -> list[str]:
-    cmd = [ADB]
+    cmd = [_require_adb()]
     if SERIAL:
         cmd += ["-s", SERIAL]
     return cmd
@@ -56,7 +64,7 @@ def _base_cmd() -> list[str]:
 
 def list_devices() -> list[Device]:
     out = subprocess.run(
-        [ADB, "devices", "-l"], capture_output=True, text=True, timeout=30
+        [_require_adb(), "devices", "-l"], capture_output=True, text=True, timeout=30
     ).stdout
     devices: list[Device] = []
     for line in out.splitlines()[1:]:
@@ -77,7 +85,7 @@ def _hardware_serial(transport: str) -> str:
     """Ask a transport which physical phone it leads to."""
     try:
         proc = subprocess.run(
-            [ADB, "-s", transport, "shell", "getprop", "ro.serialno"],
+            [_require_adb(), "-s", transport, "shell", "getprop", "ro.serialno"],
             capture_output=True, text=True, timeout=15,
         )
         return proc.stdout.strip()

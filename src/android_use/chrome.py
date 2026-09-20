@@ -45,7 +45,7 @@ def _socket_exists() -> bool:
 
 
 def _forward() -> None:
-    cmd = [adb.ADB]
+    cmd = [adb._require_adb()]
     if adb.SERIAL:
         cmd += ["-s", adb.SERIAL]
     proc = subprocess.run(

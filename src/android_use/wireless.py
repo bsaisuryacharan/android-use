@@ -48,7 +48,7 @@ class Discovered:
 
 def _run(args: list[str], timeout: int = 30) -> tuple[int, str]:
     proc = subprocess.run(
-        [adb.ADB] + args, capture_output=True, text=True, timeout=timeout
+        [adb._require_adb()] + args, capture_output=True, text=True, timeout=timeout
     )
     return proc.returncode, (proc.stdout + proc.stderr).strip()
 
