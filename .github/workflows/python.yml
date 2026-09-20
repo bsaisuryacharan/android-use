@@ -1,0 +1,17 @@
+name: Python checks
+on:
+  push: { branches: [main] }
+  pull_request:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - name: Install
+        run: pip install -e .
+      - name: Import + syntax check
+        run: |
+          python -c "import android_use.server, android_use.app_backend, android_use.devices; print('imports ok')"
+          python -m compileall -q src/

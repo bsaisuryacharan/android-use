@@ -1,0 +1,20 @@
+name: Bug report
+description: Something didn't work
+labels: [bug]
+body:
+  - type: input
+    attributes: { label: Device model, placeholder: "e.g. Pixel 7, vivo V2222" }
+    validations: { required: true }
+  - type: input
+    attributes: { label: Android version, placeholder: "e.g. 14" }
+    validations: { required: true }
+  - type: dropdown
+    attributes:
+      label: Path
+      options: [ADB (cable/Wi-Fi), Companion app + Tailscale]
+    validations: { required: true }
+  - type: textarea
+    attributes: { label: What happened, description: "What you asked, what it did. Paste exact error text (NOT your token)." }
+    validations: { required: true }
+  - type: textarea
+    attributes: { label: Steps to reproduce }

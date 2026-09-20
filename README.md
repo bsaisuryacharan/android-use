@@ -68,7 +68,7 @@ Two ways to reach the phone:
 ## Quick start (ADB, 2 minutes)
 
 ```bash
-git clone <your-fork> && cd android-use
+git clone https://github.com/bsaisuryacharan/android-use && cd android-use
 uv venv && uv pip install -e .
 
 # phone: Settings → About → tap Build number ×7 → Developer options → USB debugging
