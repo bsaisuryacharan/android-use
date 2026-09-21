@@ -25,6 +25,7 @@ from pathlib import Path
 
 from starlette.applications import Starlette
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.cors import CORSMiddleware
 from starlette.responses import JSONResponse, PlainTextResponse
 from starlette.routing import Route
 
@@ -115,6 +116,19 @@ def build_app() -> tuple[Starlette, str]:
     path = f"/mcp/{secret}"
     app = mcp.streamable_http_app(streamable_http_path=path, host="0.0.0.0")
     app.add_middleware(Gate, secret_path=path, token=bearer_token())
+    # claude.ai and Claude Desktop reach this server from a browser, so they send
+    # a CORS preflight before connecting. Without this the OPTIONS request 405s
+    # and the client just reports "no server responded at this URL". Added after
+    # Gate so it wraps it: the preflight is answered before the secret check, and
+    # the client can read mcp-session-id back off the response.
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["https://claude.ai", "https://claude.com"],
+        allow_origin_regex=r"https://([a-z0-9-]+\.)*(claude\.ai|claude\.com|anthropic\.com)",
+        allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+        allow_headers=["*"],
+        expose_headers=["mcp-session-id"],
+    )
     app.router.routes.append(
         Route("/healthz", lambda r: PlainTextResponse("ok"), methods=["GET"])
     )
