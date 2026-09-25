@@ -40,6 +40,9 @@ class BridgeService : Service() {
             } else if (!off) {
                 clearAttention()
             }
+            // Keeps the "minutes left" in the notification honest, and drops
+            // the "can control" wording the moment a grant runs out.
+            refresh(applicationContext)
             handler.postDelayed(this, CHECK_INTERVAL_MS)
         }
     }
@@ -54,11 +57,69 @@ class BridgeService : Service() {
 
         fun start(context: Context) {
             val intent = Intent(context, BridgeService::class.java)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
+            runCatching {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    context.startForegroundService(intent)
+                } else {
+                    context.startService(intent)
+                }
             }
+        }
+
+        /** Update the notification in place - after a grant, a stop, or a tick. */
+        fun refresh(context: Context) {
+            val manager = context.getSystemService(NotificationManager::class.java) ?: return
+            createChannel(context)
+            runCatching { manager.notify(NOTIFICATION_ID, build(context)) }
+        }
+
+        private fun createChannel(context: Context) {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+            val channel = NotificationChannel(
+                CHANNEL, "Remote control", NotificationManager.IMPORTANCE_LOW
+            ).apply { description = "Shown whenever this phone can be controlled remotely." }
+            context.getSystemService(NotificationManager::class.java)?.createNotificationChannel(channel)
+        }
+
+        fun build(context: Context): Notification {
+            val granted = Security.isGranted(context)
+            val minutes = Security.grantRemainingMs(context) / 60_000
+            val open = PendingIntent.getActivity(
+                context, 0, Intent(context, MainActivity::class.java),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
+            val stop = PendingIntent.getService(
+                context, 1,
+                Intent(context, BridgeService::class.java).setAction(ACTION_STOP),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
+            val left = when {
+                minutes >= 120 -> "about ${minutes / 60} hours left"
+                minutes >= 1 -> "$minutes min left"
+                else -> "less than a minute left"
+            }
+            val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                Notification.Builder(context, CHANNEL)
+            } else {
+                @Suppress("DEPRECATION") Notification.Builder(context)
+            }
+            return builder
+                .setContentTitle(
+                    if (granted) "Your assistant can control this phone"
+                    else "Android Use is ready (control not granted)"
+                )
+                .setContentText(
+                    if (granted) "$left. Tap Stop to end it immediately."
+                    else "Open the app to grant access for a limited time."
+                )
+                .setSmallIcon(android.R.drawable.ic_menu_manage)
+                .setOngoing(true)
+                .setOnlyAlertOnce(true)
+                .setContentIntent(open)
+                .addAction(
+                    Notification.Action.Builder(null, "Stop", stop).build()
+                )
+                .build()
         }
     }
 
@@ -66,8 +127,8 @@ class BridgeService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        createChannel()
-        startForeground(NOTIFICATION_ID, buildNotification())
+        createChannel(this)
+        startForeground(NOTIFICATION_ID, build(this))
         bridge = HttpBridge(applicationContext).also { it.start() }
         handler.postDelayed(selfCheck, 5_000L)
     }
@@ -75,9 +136,13 @@ class BridgeService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
             Security.revoke(applicationContext)
+            ControlAccessibilityService.instance?.overlays?.removeAll()
+            ActivityLog.add(applicationContext, "You stopped the help")
+            refresh(applicationContext)
             stopSelf()
             return START_NOT_STICKY
         }
+        refresh(applicationContext)
         // START_STICKY so Funtouch's aggressive process management does not
         // silently end the session; the accessibility binding also revives it.
         return START_STICKY
@@ -90,50 +155,8 @@ class BridgeService : Service() {
         super.onDestroy()
     }
 
-    private fun createChannel() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-        val channel = NotificationChannel(
-            CHANNEL, "Remote control", NotificationManager.IMPORTANCE_LOW
-        ).apply { description = "Shown whenever this phone can be controlled remotely." }
-        getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
-    }
-
-    private fun buildNotification(): Notification {
-        val granted = Security.isGranted(applicationContext)
-        val open = PendingIntent.getActivity(
-            this, 0, Intent(this, MainActivity::class.java),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
-        val stop = PendingIntent.getService(
-            this, 1,
-            Intent(this, BridgeService::class.java).setAction(ACTION_STOP),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
-        val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            Notification.Builder(this, CHANNEL)
-        } else {
-            @Suppress("DEPRECATION") Notification.Builder(this)
-        }
-        return builder
-            .setContentTitle(
-                if (granted) "Your assistant can control this phone"
-                else "Android Use is ready (control not granted)"
-            )
-            .setContentText(
-                if (granted) "Tap Stop to end it immediately."
-                else "Open the app to grant access for a limited time."
-            )
-            .setSmallIcon(android.R.drawable.ic_menu_manage)
-            .setOngoing(true)
-            .setContentIntent(open)
-            .addAction(
-                Notification.Action.Builder(null, "Stop", stop).build()
-            )
-            .build()
-    }
-
     private fun notifyNeedsAttention() {
-        val manager = getSystemService(NotificationManager::class.java)
+        val manager = getSystemService(NotificationManager::class.java) ?: return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             manager.createNotificationChannel(
                 NotificationChannel(
@@ -173,11 +196,6 @@ class BridgeService : Service() {
     }
 
     private fun clearAttention() {
-        getSystemService(NotificationManager::class.java).cancel(ATTENTION_ID)
-    }
-
-    fun refreshNotification() {
-        getSystemService(NotificationManager::class.java)
-            .notify(NOTIFICATION_ID, buildNotification())
+        getSystemService(NotificationManager::class.java)?.cancel(ATTENTION_ID)
     }
 }

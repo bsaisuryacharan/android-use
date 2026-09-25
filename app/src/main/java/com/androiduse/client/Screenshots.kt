@@ -24,13 +24,18 @@ object Screenshots {
     /** Android rate-limits accessibility screenshots; a burst gets rejected. */
     private const val RETRY_DELAY_MS = 1200L
 
+    /**
+     * `maxWidth` trades detail for bytes: 800px is plenty to see a screen and
+     * cheap over a phone's uplink; a zoomed close-up asks for full resolution.
+     */
     @RequiresApi(Build.VERSION_CODES.R)
-    fun take(service: AccessibilityService, quality: Int = 80): ByteArray? {
-        capture(service, quality)?.let { return it }
+    fun take(service: AccessibilityService, maxWidth: Int = 800, quality: Int = 80): ByteArray? {
+        val width = maxWidth.coerceIn(200, 4096)
+        capture(service, width, quality)?.let { return it }
         // A second call too soon fails with ERROR_TAKE_SCREENSHOT_INTERVAL_TIME_SHORT.
         // Waiting out the interval turns a hard failure into a slight delay.
         Thread.sleep(RETRY_DELAY_MS)
-        return capture(service, quality)
+        return capture(service, width, quality)
     }
 
     @Volatile
@@ -38,7 +43,7 @@ object Screenshots {
         private set
 
     @RequiresApi(Build.VERSION_CODES.R)
-    private fun capture(service: AccessibilityService, quality: Int): ByteArray? {
+    private fun capture(service: AccessibilityService, maxWidth: Int, quality: Int): ByteArray? {
         val latch = CountDownLatch(1)
         var result: ByteArray? = null
         val executor = Executors.newSingleThreadExecutor()
@@ -55,9 +60,7 @@ object Screenshots {
                                 ?: ColorSpace.get(ColorSpace.Named.SRGB)
                             val bitmap = Bitmap.wrapHardwareBuffer(buffer, cs)
                             if (bitmap != null) {
-                                // Downscale here: sending a full 1080x2400 frame over a
-                                // phone's uplink is slow and the detail is not needed.
-                                val scaled = scale(bitmap, 800)
+                                val scaled = scale(bitmap, maxWidth)
                                 val out = ByteArrayOutputStream()
                                 scaled.compress(Bitmap.CompressFormat.JPEG, quality, out)
                                 result = out.toByteArray()

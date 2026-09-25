@@ -1,9 +1,11 @@
 package com.androiduse.client
 
 import android.accessibilityservice.AccessibilityServiceInfo
+import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
 import android.view.accessibility.AccessibilityManager
@@ -33,6 +35,17 @@ object Setup {
         return manager
             .getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
             .any { it.resolveInfo?.serviceInfo?.packageName == ctx.packageName }
+    }
+
+    /**
+     * Can the app show notifications? On Android 13+ this is a permission the
+     * owner grants, and without it the "someone can control this phone - Stop"
+     * notification is silently hidden. That notification is a promise this
+     * app makes, so it is a setup step, not an optional extra.
+     */
+    fun notificationsAllowed(ctx: Context): Boolean {
+        val manager = ctx.getSystemService(NotificationManager::class.java) ?: return false
+        return manager.areNotificationsEnabled()
     }
 
     fun batteryExempt(ctx: Context): Boolean {
@@ -115,6 +128,29 @@ object Setup {
                 "than downloaded from the Play Store. It is normal.",
         ),
         Step(
+            title = "Show when help is active",
+            why = "So you can always see when someone can use your phone, and stop it with one tap.",
+            done = notificationsAllowed(ctx),
+            actionLabel = "Allow notifications",
+            action = { c ->
+                val activity = c as? android.app.Activity
+                // The system prompt can only be shown so many times; after the
+                // first try, the app's notification settings are the way in.
+                if (activity != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                    !askedForNotifications(c)
+                ) {
+                    markAskedForNotifications(c)
+                    activity.requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 7)
+                } else {
+                    c.startActivity(
+                        Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                            .putExtra(Settings.EXTRA_APP_PACKAGE, c.packageName)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    )
+                }
+            },
+        ),
+        Step(
             title = "Keep it running in the background",
             why = "Otherwise the phone shuts it down and help stops working.",
             done = batteryExempt(ctx),
@@ -181,8 +217,18 @@ object Setup {
         )
     }
 
+    private fun askedForNotifications(ctx: Context): Boolean =
+        ctx.getSharedPreferences("android_use_security", Context.MODE_PRIVATE)
+            .getBoolean("asked_notifications", false)
+
+    private fun markAskedForNotifications(ctx: Context) {
+        ctx.getSharedPreferences("android_use_security", Context.MODE_PRIVATE)
+            .edit().putBoolean("asked_notifications", true).apply()
+    }
+
     fun allReady(ctx: Context): Boolean =
         accessibilityEnabled(ctx) &&
+            notificationsAllowed(ctx) &&
             tailscaleAddress().isNotBlank() &&
             alwaysOnVpnSet(ctx)
 }

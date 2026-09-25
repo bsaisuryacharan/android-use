@@ -69,6 +69,11 @@ KEYS_V2 = GLOBAL_KEYS + [
 # though the reply did not come back, and a repeated "Send" is not a retry.
 _IDEMPOTENT = {"/status", "/screen", "/screenshot", "/apps", "/device_state", "/ping"}
 
+# A tap on something that sends, pays or deletes may wait on the phone for its
+# owner to say yes (up to a minute). The reply must be allowed to take that long,
+# or a tap the owner then approves would be reported to the model as failed.
+OWNER_CONFIRM_TIMEOUT = 75
+
 _APP_SETTABLE = [
     "volume_media", "volume_ring", "volume_alarm", "volume_notification", "ringer",
     "do_not_disturb", "flashlight", "brightness", "font_size", "screen_timeout",
@@ -344,14 +349,16 @@ class AppBackend(Backend):
         # Click the node itself, which survives layout shifts that would make a
         # coordinate tap land on the wrong thing.
         if element.node_ref is not None:
-            result = self._request("/tap", {"index": int(element.node_ref)})
+            result = self._request("/tap", {"index": int(element.node_ref)},
+                                   timeout=max(self.timeout, OWNER_CONFIRM_TIMEOUT))
             if result.get("ok"):
                 return
         x, y = element.center
         self.tap_xy(x, y)
 
     def tap_xy(self, x: int, y: int) -> None:
-        self._ok(self._request("/tap", {"x": x, "y": y}), "tap")
+        self._ok(self._request("/tap", {"x": x, "y": y},
+                               timeout=max(self.timeout, OWNER_CONFIRM_TIMEOUT)), "tap")
 
     def swipe(self, x1: int, y1: int, x2: int, y2: int, duration_ms: int = 300) -> None:
         self._ok(self._request(
@@ -370,7 +377,8 @@ class AppBackend(Backend):
 
     def double_tap_xy(self, x: int, y: int) -> None:
         if self.protocol >= 2:
-            self._ok(self._request("/doubletap", {"x": x, "y": y}), "double tap")
+            self._ok(self._request("/doubletap", {"x": x, "y": y},
+                                   timeout=max(self.timeout, OWNER_CONFIRM_TIMEOUT)), "double tap")
         else:
             super().double_tap_xy(x, y)
 

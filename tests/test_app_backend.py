@@ -176,10 +176,19 @@ def test_refusals_are_reported_as_they_are(bridge):
 
 
 def test_a_slow_action_is_never_repeated(bridge):
-    bridge.routes["/tap"] = (200, {"ok": True}, 1.5)
+    bridge.routes["/swipe"] = (200, {"ok": True}, 1.5)
     with pytest.raises(BackendError, match="may or may not have happened"):
-        client(bridge, timeout=0.5).tap_xy(5, 5)
+        client(bridge, timeout=0.5).swipe(1, 2, 3, 4)
     real_time.sleep(1.2)  # let the slow handler finish before counting
+    assert bridge.paths("POST").count("/swipe") == 1
+
+
+def test_taps_wait_long_enough_for_the_owner(bridge, monkeypatch):
+    # The phone may hold a risky tap while its owner decides; a short reply
+    # timeout would report a tap the owner then allows as a failure.
+    monkeypatch.setattr(app_backend, "OWNER_CONFIRM_TIMEOUT", 3)
+    bridge.routes["/tap"] = (200, {"ok": True}, 1.0)
+    client(bridge, timeout=0.5).tap_xy(5, 5)
     assert bridge.paths("POST").count("/tap") == 1
 
 

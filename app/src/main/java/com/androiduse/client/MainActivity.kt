@@ -4,9 +4,10 @@ import android.app.Activity
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
-import android.os.Bundle
 import android.net.Uri
+import android.os.Bundle
 import android.provider.Settings
+import android.text.format.DateFormat
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.ViewGroup
@@ -15,6 +16,7 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import java.util.Date
 
 /**
  * Setup checklist and kill switch.
@@ -39,6 +41,12 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         BridgeService.start(this)
+        render()
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        BridgeService.refresh(this)
         render()
     }
 
@@ -73,8 +81,7 @@ class MainActivity : Activity() {
                 if (address.isNotBlank())
                     "Send these two things to the person helping you.\n\nAddress:  $address"
                 else "Your code is ready. The address appears once Tailscale is " +
-                     "connected (step 4) - you can send the code now and the " +
-                     "address later.",
+                     "connected - you can send the code now and the address later.",
                 16f
             )
         )
@@ -104,12 +111,98 @@ class MainActivity : Activity() {
             })
         }
 
+        container.addView(text("Control", 20f, bold = true, padTop = 40))
+        val granted = Security.isGranted(this)
+        val mins = Security.grantRemainingMs(this) / 60000
+        container.addView(
+            text(
+                if (granted) "Your helper can control this phone for about $mins more minute(s)."
+                else "Your helper cannot control this phone right now. If they ask, a " +
+                    "notification lets you allow it with one tap.",
+                16f
+            )
+        )
+        container.addView(button("Allow help for 1 hour") { allow(60) })
+        container.addView(button("Allow help for 8 hours") { allow(8 * 60) })
+        container.addView(button("Allow help for 30 days") { allow(30 * 24 * 60) })
+        container.addView(button("Stop help now") {
+            Security.revoke(this)
+            ControlAccessibilityService.instance?.overlays?.removeAll()
+            ActivityLog.add(this, "You stopped the help")
+            BridgeService.refresh(this)
+            render()
+        })
+
+        container.addView(text("Safety", 20f, bold = true, padTop = 40))
+        val confirm = Security.confirmSensitive(this)
+        container.addView(
+            text(
+                if (confirm) "Before your helper sends a message, pays, deletes something or " +
+                    "makes a call, this phone asks you first. (On)"
+                else "Your helper can send, pay, delete and call without asking you on this " +
+                    "phone first. (Off)",
+                16f
+            )
+        )
+        container.addView(button(if (confirm) "Stop asking me" else "Ask me first (recommended)") {
+            Security.setConfirmSensitive(this, !confirm)
+            ActivityLog.add(this, if (confirm) "You turned off 'ask me first'" else "You turned on 'ask me first'")
+            render()
+        })
+
+        container.addView(text("Extra permissions (optional)", 20f, bold = true, padTop = 40))
+        container.addView(
+            text(
+                "These let your helper fix common problems directly instead of " +
+                    "hunting through settings screens.",
+                15f
+            )
+        )
+        val canWrite = DeviceControl.canWriteSystem(this)
+        container.addView(
+            text(
+                (if (canWrite) "✓ " else "") + "Change screen brightness, text size and " +
+                    "how soon the screen turns off.",
+                16f, padTop = 16
+            )
+        )
+        if (!canWrite) {
+            container.addView(button("Allow") {
+                startActivity(
+                    Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, Uri.parse("package:$packageName"))
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
+            })
+        }
+        val canDnd = DeviceControl.canControlDnd(this)
+        container.addView(
+            text((if (canDnd) "✓ " else "") + "Turn Do Not Disturb on and off.", 16f, padTop = 16)
+        )
+        if (!canDnd) {
+            container.addView(button("Allow") {
+                startActivity(
+                    Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
+            })
+        }
+
+        container.addView(text("Using Claude on this same phone", 20f, bold = true, padTop = 40))
+        container.addView(
+            text(
+                "Open Claude in split screen or a pop-up window next to the app you " +
+                    "want help with. Android Use reads the other app, not the chat. You " +
+                    "can also just ask Claude - it will switch apps and come back.",
+                16f
+            )
+        )
+
         container.addView(text("Floating chat panel", 20f, bold = true, padTop = 40))
         val canOverlay = Settings.canDrawOverlays(this)
         container.addView(
             text(
                 if (canOverlay)
-                    "Show the Claude chat in a small movable window on top of your " +
+                    "Show the Claude website in a small movable window on top of your " +
                     "other apps - so you can see the chat while Claude works."
                 else "To float the chat over other apps, allow \"Display over " +
                     "other apps\" first.",
@@ -138,23 +231,20 @@ class MainActivity : Activity() {
             })
         }
 
-        container.addView(text("Control", 20f, bold = true, padTop = 40))
-        val granted = Security.isGranted(this)
-        val mins = Security.grantRemainingMs(this) / 60000
-        container.addView(
-            text(
-                if (granted) "Your helper can control this phone for about $mins more minute(s)."
-                else "Your helper cannot control this phone right now.",
-                16f
-            )
-        )
-        container.addView(button("Allow help for 8 hours") {
-            Security.grantFor(this, 8 * 60); BridgeService.start(this); render()
-        })
-        container.addView(button("Allow help for 30 days") {
-            Security.grantFor(this, 30 * 24 * 60); BridgeService.start(this); render()
-        })
-        container.addView(button("Stop help now") { Security.revoke(this); render() })
+        container.addView(text("What your helper did recently", 20f, bold = true, padTop = 40))
+        val recent = ActivityLog.recent(this, 12)
+        if (recent.isEmpty()) {
+            container.addView(text("Nothing yet.", 15f))
+        } else {
+            val timeFormat = DateFormat.getTimeFormat(this)
+            val dateFormat = DateFormat.getDateFormat(this)
+            val today = dateFormat.format(Date())
+            recent.forEach { (at, message) ->
+                val day = dateFormat.format(Date(at))
+                val stamp = if (day == today) timeFormat.format(Date(at)) else "$day ${timeFormat.format(Date(at))}"
+                container.addView(text("$stamp  —  $message", 14f, padTop = 6))
+            }
+        }
 
         if (!Setup.canSelfRepair(this)) {
             container.addView(
@@ -167,6 +257,20 @@ class MainActivity : Activity() {
                 )
             )
         }
+    }
+
+    private fun describe(minutes: Int): String = when {
+        minutes < 60 -> "$minutes minutes"
+        minutes < 24 * 60 -> "${minutes / 60} hour${if (minutes < 120) "" else "s"}"
+        else -> "${minutes / (24 * 60)} days"
+    }
+
+    private fun allow(minutes: Int) {
+        Security.grantFor(this, minutes)
+        ActivityLog.add(this, "You allowed help for ${describe(minutes)}")
+        BridgeService.start(this)
+        BridgeService.refresh(this)
+        render()
     }
 
     // ----------------------------------------------------------------- views
