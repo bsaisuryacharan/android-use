@@ -29,7 +29,22 @@ DEFAULT_ALLOWLIST = [
     "com.google.android.keep",
     "com.google.android.apps.nbu.files",
     "com.android.camera",
+    # Opening the Claude app is how a task done on the same phone ends: it
+    # brings the person back to the conversation to read the answer.
+    "com.anthropic.claude",
 ]
+
+# Web browsers. A web link that lands in one of these is just a web page, so
+# open_url allows it even when the browser itself is not on the allowlist.
+BROWSERS = {
+    "com.android.chrome", "org.chromium.chrome", "com.chrome.beta",
+    "org.mozilla.firefox", "org.mozilla.focus", "com.sec.android.app.sbrowser",
+    "com.microsoft.emmx", "com.brave.browser", "com.opera.browser",
+    "com.opera.mini.native", "com.vivaldi.browser", "com.duckduckgo.mobile.android",
+    "com.kiwibrowser.browser", "com.UCMobile.intl", "com.mi.globalbrowser",
+    "com.android.browser", "com.heytap.browser", "com.vivo.browser",
+    "com.huawei.browser",
+}
 
 # Package-name tokens that carry no meaning for a human.
 _STOPWORDS = {

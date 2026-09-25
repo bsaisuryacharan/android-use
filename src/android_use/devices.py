@@ -87,12 +87,18 @@ def load_phones() -> dict[str, Phone]:
 
 
 def default_name() -> str:
+    """The phone explicitly set as the default, or "" if none is.
+
+    Deliberately no fallback to "the first one": with several phones and no
+    default, the first in the file is an accident of ordering, and acting on
+    it is exactly the wrong-phone mistake this module exists to prevent.
+    """
     cfg = _config()
     named = cfg.get("default_device")
     phones = load_phones()
     if named and named in phones:
         return named
-    return next(iter(phones), "")
+    return ""
 
 
 def set_default(name: str) -> None:
@@ -137,7 +143,12 @@ def remove_phone(name: str) -> bool:
         return False
     devices.pop(name)
     if cfg.get("default_device") == name:
-        cfg["default_device"] = next(iter(devices), "")
+        # Do not promote whichever phone happens to be next in the file: the
+        # user never chose it. With one phone left, it is used anyway; with
+        # several, they are asked to name one.
+        cfg.pop("default_device", None)
+    if cfg.get("locked_device") == name:
+        cfg.pop("locked_device", None)
     _save(cfg)
     return True
 
