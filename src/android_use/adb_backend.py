@@ -53,7 +53,16 @@ class AdbBackend(Backend):
                 # uiautomator waits for the UI to go idle by itself; this only
                 # gives a transition a head start so it is not caught mid-way.
                 time.sleep(0.5)
-            screen = ui.get_screen(max_texts=max_texts)
+            try:
+                screen = ui.get_screen(max_texts=max_texts)
+            except adb.AdbError:
+                # A sleeping phone often has no window to dump at all, so the
+                # read fails before anyone could notice the screen was off.
+                # Wake it and try once more.
+                if actions.probe_state()["screen_on"] is not False:
+                    raise
+                actions.wake_and_unlock()
+                screen = ui.get_screen(max_texts=max_texts)
             state = actions.probe_state()
         except adb.AdbError as exc:
             raise BackendError(str(exc)) from exc

@@ -108,3 +108,29 @@ def test_hung_adb_is_explained(monkeypatch):
     monkeypatch.setattr(adb.subprocess, "run", hang)
     with pytest.raises(adb.AdbError, match="did not answer"):
         adb.shell("echo hi")
+
+
+def test_adb_read_wakes_a_sleeping_phone_whose_screen_cannot_be_dumped(monkeypatch):
+    from android_use import actions, adb, ui
+    from android_use.adb_backend import AdbBackend
+    from android_use.models import Screen
+
+    state = {"on": False, "woken": 0}
+
+    def dump(max_texts=15):
+        if not state["on"]:
+            raise adb.AdbError("ERROR: null root node returned by UiTestAutomationBridge.")
+        return Screen(package="com.android.launcher", activity="", width=1080, height=2400)
+
+    def wake():
+        state["on"] = True
+        state["woken"] += 1
+        return "awake and unlocked"
+
+    monkeypatch.setattr(ui, "get_screen", dump)
+    monkeypatch.setattr(actions, "wake_and_unlock", wake)
+    monkeypatch.setattr(actions, "probe_state", lambda: {
+        "screen_on": state["on"], "locked": False, "keyboard_open": False,
+        "package": "", "activity": ""})
+    screen = AdbBackend(auto_wireless=False).get_screen()
+    assert screen.package == "com.android.launcher" and state["woken"] == 1
