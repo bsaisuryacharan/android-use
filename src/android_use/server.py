@@ -15,13 +15,15 @@ over Wi-Fi, or the on-device client app) is swappable underneath them.
 """
 from __future__ import annotations
 
+import functools
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Annotated, Any
 
 from mcp.server.mcpserver import Image, MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
@@ -99,10 +101,34 @@ _SETUP = ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHi
 
 
 def _tool(kind: ToolAnnotations, title: str):
+    """Register a tool, with a safety net for failures it did not anticipate.
+
+    The SDK shows the model only the text of a ToolError; anything else becomes
+    a bare "Error executing tool", which leaves it guessing. A phone that
+    stops answering mid-call is not a bug to hide - so any failure reaches the
+    model as a sentence it can act on.
+    """
     # structured_output=False: every tool returns human-readable text. Letting
     # the SDK also emit it as structured JSON sent each screen twice - double
     # the bytes over a phone's uplink, and double the tokens.
-    return mcp.tool(title=title, annotations=kind, structured_output=False)
+    register = mcp.tool(title=title, annotations=kind, structured_output=False)
+
+    def decorate(fn):
+        @functools.wraps(fn)
+        def safe(*args, **kwargs):
+            try:
+                return fn(*args, **kwargs)
+            except ToolError:
+                raise
+            except BackendError as exc:
+                raise ToolError(str(exc)) from exc
+            except Exception as exc:  # noqa: BLE001 - reported, not swallowed
+                raise ToolError(f"Unexpected {type(exc).__name__}: {exc}") from exc
+
+        register(safe)
+        return safe
+
+    return decorate
 
 
 Device = Annotated[str, Field(
@@ -829,7 +855,8 @@ def get_screen(
     try:
         screen = _read(backend, key, max_texts=200 if all_text else 15)
     except BackendError as exc:
-        return f"Could not read the screen: {exc}\nTry wake_screen() first."
+        hint = "" if "banking or payment" in str(exc) else "\nTry wake_screen() first."
+        return f"{_which(device)}Could not read the screen: {exc}{hint}"
     return _show(key, screen, device)
 
 
@@ -850,7 +877,7 @@ def take_screenshot(
     same indexes tap() uses."""
     backend, err = _ready(device)
     if err:
-        raise ValueError(err)
+        raise ToolError(err)
     key = _key(device)
     screen = _read(backend, key)
     blocked = _blocked(screen)
@@ -858,13 +885,13 @@ def take_screenshot(
         # Never send a picture of a banking app the owner has not allowed.
         memory.remember(key, Screen(package=screen.package, activity="",
                                     width=screen.width, height=screen.height))
-        raise ValueError(blocked)
+        raise ToolError(blocked)
     max_width = max(200, min(int(max_width or 800), 1600))
     notes: list[str] = []
     if index >= 0:
         target = screen.element(index)
         if target is None:
-            raise ValueError(f"There is no element [{index}] on screen now.")
+            raise ToolError(f"There is no element [{index}] on screen now.")
         raw = backend.screenshot(max_width=screen.width or 0)
         if shots.is_blank(raw):
             notes.append(_BLANK)
@@ -979,8 +1006,9 @@ def scroll_to(
     try:
         element = None
         if index >= 0:
-            element, _, _ = _target(backend, key, index, strict=False)
-        screen = _read(backend, key, wait_idle=True)
+            element, screen, _ = _target(backend, key, index, strict=False)
+        else:
+            screen = _read(backend, key, wait_idle=True)
         for swipes in range(max(1, min(int(max_swipes), 30)) + 1):
             _check_blocked(key, screen)
             hits = screen.find(text)
@@ -994,6 +1022,13 @@ def scroll_to(
             before = screen.signature()
             backend.scroll(d, element=element)
             screen = backend.get_screen(wait_idle=True)
+            if element is not None:
+                # The phone renumbers its nodes on every read, so the element
+                # from the last screen is stale. Carry on with any element of
+                # the same list; failing that, scroll that list by its bounds.
+                same_list = [e for e in screen.elements
+                             if element.container and e.container == element.container]
+                element = same_list[0] if same_list else replace(element, node_ref=None)
             if screen.signature() == before:
                 return _show(key, screen, device, prefix=(
                     f"Reached the end of the list without finding '{text}'. It may be "

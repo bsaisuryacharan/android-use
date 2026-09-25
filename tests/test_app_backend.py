@@ -289,3 +289,15 @@ def test_links_and_screenshots(bridge):
     assert bridge.calls[-1][2]["package"] == "com.android.chrome"
     assert backend.screenshot(max_width=1080) == b"\xff\xd8jpeg"
     assert bridge.calls[-1][1] == "/screenshot?max_width=1080"
+
+
+def test_scroll_without_a_node_swipes_inside_its_own_list(bridge):
+    bridge.routes["/swipe"] = (200, {"ok": True}, 0)
+    backend = client(bridge)
+    backend._size = (1080, 2400)
+    stale = el(4, "Card", container=(0, 300, 1080, 600))
+    stale.node_ref = None
+    backend.scroll("right", element=stale)
+    assert "/scroll" not in bridge.paths()
+    swipe = bridge.calls[-1][2]
+    assert 300 <= swipe["y1"] <= 600 and swipe["x1"] > swipe["x2"]

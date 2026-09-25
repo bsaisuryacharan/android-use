@@ -216,7 +216,9 @@ def test_home_key_still_works_in_a_banking_app(phone):
 
 def test_screenshot_of_banking_app_is_refused(phone):
     phone.current = scr("com.phonepe.app", el(0, "Pay"))
-    with pytest.raises(ValueError, match="banking or payment"):
+    from mcp.server.mcpserver.exceptions import ToolError
+
+    with pytest.raises(ToolError, match="banking or payment"):
         server.take_screenshot()
 
 
@@ -539,3 +541,40 @@ def test_tool_listing_has_no_duplicate_structured_output():
         dumped = tool.model_dump(by_alias=True, exclude_none=True)
         assert "outputSchema" not in dumped, tool.name
         assert dumped.get("annotations"), tool.name
+
+
+def test_scroll_to_in_a_list_never_reuses_a_stale_node(phone):
+    carousel = (0, 300, 1080, 600)
+    phone.current = scr("p", el(0, "Card A", bounds=(0, 300, 540, 600), container=carousel),
+                        el(1, "Card B", bounds=(540, 300, 1080, 600), container=carousel),
+                        el(2, "Footer", bounds=(0, 900, 1080, 1000)))
+    server.get_screen()
+    pages = iter([
+        scr("p", el(0, "Header", bounds=(0, 100, 1080, 200)),
+            el(1, "Promo", bounds=(0, 200, 1080, 290)),
+            el(2, "Card C", bounds=(0, 300, 540, 600), container=carousel),
+            el(3, "Card D", bounds=(540, 300, 1080, 600), container=carousel)),
+        scr("p", el(0, "Header", bounds=(0, 100, 1080, 200)),
+            el(1, "Card E", bounds=(0, 300, 540, 600), container=carousel)),
+    ])
+    phone.react = lambda action: setattr(phone, "current", next(pages)) if action[0] == "scroll" else None
+    out = server.scroll_to("Card E", direction="right", index=1)
+    scrolls = [a for a in phone.actions if a[0] == "scroll"]
+    # First scroll uses the element the model picked; the second uses an
+    # element of the same list from the new screen ([2] Card C) - not the
+    # stale index 1, which is now an unrelated promo banner.
+    assert scrolls == [("scroll", "right", 1), ("scroll", "right", 2)]
+    assert "Found 'Card E'" in out
+
+
+def test_unexpected_failures_reach_the_model_as_text(phone):
+    import asyncio
+
+    def broken():
+        raise RuntimeError("the phone went away")
+    phone.installed_packages = broken
+    from mcp.server.mcpserver.exceptions import ToolError
+
+    # The protocol layer turns this into an is_error result carrying the text.
+    with pytest.raises(ToolError, match="the phone went away"):
+        asyncio.run(server.mcp.call_tool("list_apps", {}))

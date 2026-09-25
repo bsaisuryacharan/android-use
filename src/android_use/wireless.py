@@ -47,9 +47,18 @@ class Discovered:
 
 
 def _run(args: list[str], timeout: int = 30) -> tuple[int, str]:
-    proc = subprocess.run(
-        [adb._require_adb()] + args, capture_output=True, text=True, timeout=timeout
-    )
+    """Run adb; a missing or hung adb comes back as a failed result rather
+    than an exception, so every caller reports it the same plain way."""
+    try:
+        proc = subprocess.run(
+            [adb._require_adb()] + args, capture_output=True, text=True, timeout=timeout
+        )
+    except adb.AdbError as exc:
+        return 127, str(exc)
+    except subprocess.TimeoutExpired:
+        return 124, f"adb {' '.join(args[:2])} timed out after {timeout}s"
+    except OSError as exc:
+        return 127, f"Could not run adb ({exc})."
     return proc.returncode, (proc.stdout + proc.stderr).strip()
 
 
@@ -184,6 +193,14 @@ def auto_connect() -> tuple[bool, str]:
     )
 
 
+def _devices() -> list:
+    """adb's device list, or empty when adb itself cannot be run."""
+    try:
+        return adb.list_devices()
+    except adb.AdbError:
+        return []
+
+
 def _hw_serial(transport: str) -> str:
     try:
         _, out = _run(["-s", transport, "shell", "getprop", "ro.serialno"], timeout=10)
@@ -195,7 +212,10 @@ def _hw_serial(transport: str) -> str:
 def ensure_connected(retries: int = 1) -> tuple[bool, str]:
     """Return an already-attached device, or try to bring one up wirelessly."""
     for attempt in range(retries + 1):
-        attached = [d for d in adb.list_devices() if d.ready]
+        try:
+            attached = [d for d in adb.list_devices() if d.ready]
+        except adb.AdbError as exc:
+            return False, str(exc)
         if attached:
             # Record a working wireless address as we see it, so a later drop
             # can be repaired without a cable or a fresh pairing code.
@@ -206,7 +226,7 @@ def ensure_connected(retries: int = 1) -> tuple[bool, str]:
         ok, msg = auto_connect()
         if ok:
             time.sleep(1.0)  # let adb finish registering the transport
-            if any(d.ready for d in adb.list_devices()):
+            if any(d.ready for d in _devices()):
                 return True, msg
         if attempt >= retries:
             return False, msg
@@ -217,7 +237,7 @@ def wait_authorized(address: str, timeout: float = 15.0) -> bool:
     """Poll until adb reports the address as an authorised device."""
     deadline = time.time() + timeout
     while time.time() < deadline:
-        for d in adb.list_devices():
+        for d in _devices():
             if d.serial == address and d.ready:
                 return True
         time.sleep(1.0)
@@ -248,7 +268,7 @@ def enable_via_usb(port: int = 5555) -> tuple[bool, str]:
     this again with the cable in, or pair properly with pair_wireless.
     """
     usb = [
-        d for d in adb.list_devices() if d.ready and not is_wireless(d.serial)
+        d for d in _devices() if d.ready and not is_wireless(d.serial)
     ]
     if not usb:
         return False, (

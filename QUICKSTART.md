@@ -30,10 +30,14 @@ Restart Claude Code, then just talk:
 - *"What's on my phone screen?"*
 - *"Turn off my 7am alarm"*
 - *"Why isn't my internet working?"*
+- *"Why doesn't my phone ring?"*
+- *"Make the text bigger and the screen brighter"*
 - *"Open YouTube and search for lo-fi"*
+- *"Show me directions to the nearest pharmacy"*
 
 Claude reads the screen, acts by index, and shows you what changed after each
-step.
+step. Anything that sends, pays, deletes or calls is held back until you say
+yes. `activity_log` shows everything it did.
 
 ## Going wireless / fully remote
 

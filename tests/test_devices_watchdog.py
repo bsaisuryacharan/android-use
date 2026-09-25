@@ -80,3 +80,31 @@ def test_forgetting_the_default_does_not_promote_another(isolated_config):
     assert devices.remove_phone("mine")
     phone, err = devices.resolve("")
     assert phone is None and "none is set as the default" in err
+
+
+def test_missing_adb_is_explained_not_crashed(monkeypatch):
+    from android_use import adb, server, wireless
+    import pytest
+
+    monkeypatch.setattr(adb, "ADB", "/nonexistent/adb")
+    with pytest.raises(adb.AdbError, match="Could not run adb"):
+        adb.list_devices()
+    ok, msg = wireless.ensure_connected()
+    assert not ok and "Could not run adb" in msg
+    # Through a tool: a sentence the user can act on, not a traceback.
+    out = server.get_screen()
+    assert "Phone not reachable" in out and "adb" in out
+
+
+def test_hung_adb_is_explained(monkeypatch):
+    import subprocess
+    from android_use import adb
+    import pytest
+
+    def hang(*args, **kwargs):
+        raise subprocess.TimeoutExpired(cmd="adb", timeout=30)
+
+    monkeypatch.setattr(adb, "ADB", "/usr/bin/adb")
+    monkeypatch.setattr(adb.subprocess, "run", hang)
+    with pytest.raises(adb.AdbError, match="did not answer"):
+        adb.shell("echo hi")

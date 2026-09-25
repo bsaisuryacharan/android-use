@@ -3,14 +3,39 @@
 One-time setup over ADB. After this the phone needs no cable, no Wi-Fi
 debugging, and no developer options — it works from anywhere over Tailscale.
 
-## 1. Build and install
+## 1. Get the APK
+
+Download `app-debug.apk` from the latest GitHub release (CI builds it), or
+build it yourself:
 
 ```bash
-gradle assembleRelease
-adb install -r app/build/outputs/apk/release/app-release.apk
+./gradlew assembleRelease     # or assembleDebug
 ```
 
-## 2. Grants (the part that matters)
+## 2. One command: install and grant
+
+With the phone connected over adb (cable, or wireless debugging):
+
+```bash
+./scripts/setup_phone.sh path/to/app.apk
+```
+
+It installs the app with Play attribution, allows restricted settings, grants
+`WRITE_SECURE_SETTINGS` (so the phone can repair itself remotely), allows
+notifications, exempts the app from battery optimisation, turns on the
+accessibility service **without switching off any others**, and opens the app.
+
+Two optional extras, only with the owner's agreement:
+
+```bash
+./scripts/setup_phone.sh app.apk --allow-settings   # brightness, text size, screen timeout
+./scripts/setup_phone.sh app.apk --allow-dnd        # Do Not Disturb on/off
+```
+
+The owner can also allow those later from the app's *Extra permissions*.
+
+<details>
+<summary>What the script runs, if you would rather do it by hand</summary>
 
 On Android 13+, a sideloaded app is **blocked from enabling an
 AccessibilityService through the UI** — the toggle is greyed out as a
@@ -19,9 +44,10 @@ AccessibilityService through the UI** — the toggle is greyed out as a
 ```bash
 PKG=com.androiduse.client
 SVC="$PKG/$PKG.ControlAccessibilityService"
+adb install -r -i com.android.vending app.apk
 CUR=$(adb shell settings get secure enabled_accessibility_services | tr -d '\r')
 [ "$CUR" = "null" ] && CUR=""
-case "$CUR" in *"$SVC"*) NEW="$CUR";; "") NEW="$SVC";; *) NEW="$CUR:$SVC";; esac
+case ":$CUR:" in *":$SVC:"*) NEW="$CUR";; *) NEW="${CUR:+$CUR:}$SVC";; esac
 adb shell settings put secure enabled_accessibility_services "$NEW"
 adb shell settings put secure accessibility_enabled 1
 
@@ -30,20 +56,30 @@ adb shell settings put secure accessibility_enabled 1
 adb shell cmd appops set $PKG ACCESS_RESTRICTED_SETTINGS allow
 
 adb shell pm grant $PKG android.permission.WRITE_SECURE_SETTINGS
+adb shell pm grant $PKG android.permission.POST_NOTIFICATIONS   # Android 13+
 adb shell dumpsys deviceidle whitelist +$PKG
 ```
 
 Note the `case` block: it **appends** to the existing list. Overwriting it
 would silently disable any accessibility service the user already relies on.
+</details>
 
 ## 3. On the phone
 
 Open **Android Use** and:
-- tap **Grant control** (30 minutes or 8 hours — control is always time-boxed)
-- tap **Show pairing token** and copy it
-- tap **Ignore battery optimisation**
+- tap **Allow help for 1 hour / 8 hours / 30 days** (control is always
+  time-boxed; when it lapses, `request_control` sends the owner a one-tap
+  "allow" notification)
+- finish the checklist (notifications, background running, Tailscale)
+- tap **Send these details to my helper** — or **Show the code on screen**
 
-Then put the token in `~/.android-use/config.json`:
+Then register the phone from Claude:
+
+```
+add_phone("mum", "100.x.y.z", "<the code>", label="Mum's phone")
+```
+
+or, for a single phone, put it in `~/.android-use/config.json`:
 
 ```json
 {
@@ -52,6 +88,20 @@ Then put the token in `~/.android-use/config.json`:
   "bridge_token": "<the token>"
 }
 ```
+
+## What the owner sees
+
+- A notification while control is possible, with the time left and a **Stop**
+  button.
+- While commands arrive, a small banner — *"Your assistant is using this
+  phone · Stop"* — and a ring wherever a tap lands. The banner also keeps the
+  screen from locking mid-task.
+- With **Ask me first** on (the default), a large *"Is that OK?"* card before
+  any tap that sends, pays, deletes or calls.
+- Messages and questions from the helper (`say_to_owner`, `ask_owner`), in big
+  print, optionally read aloud.
+- A list of what the helper did recently, on the app's main screen, and a
+  picker for which apps the helper may open.
 
 ## 4. Remote access
 
@@ -212,6 +262,8 @@ adb install -r -i com.android.vending app-release.apk
 
 ### Still needs a person
 
-A **locked phone**. The app cannot wake the screen or get past a PIN, so while
-the screen is locked most actions return the lock screen. Reading state and
-repairing still work; tapping through apps does not.
+A **PIN, pattern or fingerprint lock**. The app now wakes the screen by itself
+and dismisses a swipe lock, and while a helper is working it keeps the screen
+from locking. But a secure lock is never bypassed: the phone shows its unlock
+screen, and the owner has to unlock it. Reading state, repairing and
+`request_control` all work while it is locked; tapping through apps does not.

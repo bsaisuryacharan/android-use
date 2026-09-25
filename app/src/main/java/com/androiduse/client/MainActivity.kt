@@ -150,6 +150,16 @@ class MainActivity : Activity() {
             render()
         })
 
+        val allowed = Security.allowedPackages(this)
+        container.addView(
+            text(
+                "Your helper can open ${allowed.size} app(s) on this phone. Banking and " +
+                    "payment apps stay off-limits unless you tick them here.",
+                16f, padTop = 16
+            )
+        )
+        container.addView(button("Choose which apps they can open") { chooseApps() })
+
         container.addView(text("Extra permissions (optional)", 20f, bold = true, padTop = 40))
         container.addView(
             text(
@@ -257,6 +267,39 @@ class MainActivity : Activity() {
                 )
             )
         }
+    }
+
+    /**
+     * The on-device allowlist, edited by the owner. The server has its own
+     * list too, but this one is the one that counts: it is enforced here, on
+     * the phone, whatever the server says.
+     */
+    private fun chooseApps() {
+        val pm = packageManager
+        val launcher = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+        @Suppress("DEPRECATION")
+        val apps = pm.queryIntentActivities(launcher, 0)
+            .map { it.activityInfo.packageName to it.loadLabel(pm).toString() }
+            .filter { (pkg, _) -> pkg != packageName }
+            .distinctBy { it.first }
+            .sortedBy { it.second.lowercase() }
+        val allowed = Security.allowedPackages(this).toMutableSet()
+        val labels = apps.map { (pkg, label) ->
+            if (Security.looksSensitive(pkg, label)) "⚠ $label (banking or payment)" else label
+        }.toTypedArray()
+        val checked = apps.map { it.first in allowed }.toBooleanArray()
+        android.app.AlertDialog.Builder(this)
+            .setTitle("Apps your helper can open")
+            .setMultiChoiceItems(labels, checked) { _, which, isChecked ->
+                if (isChecked) allowed.add(apps[which].first) else allowed.remove(apps[which].first)
+            }
+            .setPositiveButton("Save") { _, _ ->
+                Security.setAllowedPackages(this, allowed)
+                ActivityLog.add(this, "You changed which apps your helper can open (${allowed.size})")
+                render()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun describe(minutes: Int): String = when {

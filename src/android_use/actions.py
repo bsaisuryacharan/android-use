@@ -250,22 +250,31 @@ def _intent_action(kind: str) -> str:
     return "android.intent.action.DIAL" if kind == "dial" else "android.intent.action.VIEW"
 
 
+def _intent_args(url: str, kind: str) -> str:
+    # BROWSABLE limits a link to what a web page could open anyway. The
+    # dialler's DIAL filter does not declare it, so it is left off there.
+    category = "" if kind == "dial" else " -c android.intent.category.BROWSABLE"
+    return f"-a {_intent_action(kind)}{category} -d {shlex.quote(url)}"
+
+
 def resolve_url(url: str, kind: str = "web") -> str:
     """Which app would open this link? "" if none, "android" for a chooser."""
     try:
-        out = adb.shell(
-            f"cmd package resolve-activity --brief -a {_intent_action(kind)} "
-            f"-c android.intent.category.BROWSABLE -d {shlex.quote(url)}"
-        )
+        out = adb.shell(f"cmd package resolve-activity --brief {_intent_args(url, kind)}")
     except adb.AdbError:
         return ""
     components = [line.strip() for line in out.splitlines() if "/" in line]
-    return components[-1].split("/", 1)[0] if components else ""
+    if not components:
+        return ""
+    package, activity = components[-1].split("/", 1)
+    if "ResolverActivity" in activity or "ChooserActivity" in activity:
+        return "android"
+    return package
 
 
 def open_url(url: str, kind: str = "web", package: str = "") -> None:
     target = f" -p {shlex.quote(package)}" if package else ""
-    adb.shell(f"am start -a {_intent_action(kind)} -d {shlex.quote(url)}{target}")
+    adb.shell(f"am start {_intent_args(url, kind)}{target}")
 
 
 def _get_setting(scope: str, key: str) -> str:

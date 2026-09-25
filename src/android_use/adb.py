@@ -62,10 +62,29 @@ def _base_cmd() -> list[str]:
     return cmd
 
 
+def _run(args: list[str], timeout: int, text: bool = True) -> subprocess.CompletedProcess:
+    """Run adb, turning "could not run it" and "it hung" into AdbError.
+
+    Both happen in practice - adb moved by an SDK update, or stuck talking to
+    a phone that just dropped off Wi-Fi - and each needs a sentence the user
+    can act on, not a traceback.
+    """
+    try:
+        return subprocess.run(args, capture_output=True, text=text, timeout=timeout)
+    except subprocess.TimeoutExpired as exc:
+        raise AdbError(
+            f"adb did not answer within {timeout}s. The phone may have dropped off the "
+            "network; if it keeps happening, run: adb kill-server && adb devices"
+        ) from exc
+    except OSError as exc:
+        raise AdbError(
+            f"Could not run adb ({exc}). Install Android platform-tools, or set "
+            "ADB_PATH to the adb binary."
+        ) from exc
+
+
 def list_devices() -> list[Device]:
-    out = subprocess.run(
-        [_require_adb(), "devices", "-l"], capture_output=True, text=True, timeout=30
-    ).stdout
+    out = _run([_require_adb(), "devices", "-l"], timeout=30).stdout
     devices: list[Device] = []
     for line in out.splitlines()[1:]:
         line = line.strip()
@@ -149,12 +168,7 @@ def require_device() -> Device:
 
 def shell(command: str, timeout: int = 30) -> str:
     """Run a shell command on the device and return stdout as text."""
-    proc = subprocess.run(
-        _base_cmd() + ["shell", command],
-        capture_output=True,
-        text=True,
-        timeout=timeout,
-    )
+    proc = _run(_base_cmd() + ["shell", command], timeout=timeout)
     if proc.returncode != 0:
         raise AdbError(f"adb shell {command!r} failed: {proc.stderr.strip()}")
     return proc.stdout
@@ -162,11 +176,7 @@ def shell(command: str, timeout: int = 30) -> str:
 
 def shell_bytes(command: str, timeout: int = 60) -> bytes:
     """Run a shell command and return raw stdout bytes (for screencap)."""
-    proc = subprocess.run(
-        _base_cmd() + ["exec-out", command],
-        capture_output=True,
-        timeout=timeout,
-    )
+    proc = _run(_base_cmd() + ["exec-out", command], timeout=timeout, text=False)
     if proc.returncode != 0:
         raise AdbError(
             f"adb exec-out {command!r} failed: {proc.stderr.decode(errors='replace').strip()}"

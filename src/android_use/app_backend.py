@@ -400,10 +400,12 @@ class AppBackend(Backend):
     def scroll(self, direction: str, amount: float = 0.6, element: Element | None = None) -> None:
         if direction not in ("up", "down", "left", "right"):
             raise BackendError(f"direction must be up, down, left or right - got {direction!r}")
-        if self.protocol >= 2:
-            # Accessibility scroll actions move the list itself - no risk of a
-            # swipe landing as a tap, or of pull-to-refresh at the top.
-            index = int(element.node_ref) if element is not None and element.node_ref else -1
+        # Accessibility scroll actions move the list itself - no risk of a swipe
+        # landing as a tap, or of pull-to-refresh at the top. An element with
+        # no node reference (renumbered since) is scrolled by its bounds instead,
+        # never by handing the phone an index that now means something else.
+        if self.protocol >= 2 and (element is None or element.node_ref is not None):
+            index = int(element.node_ref) if element is not None else -1
             if self._request("/scroll", {"direction": direction, "index": index}).get("ok"):
                 return
         super().scroll(direction, amount, element)

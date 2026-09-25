@@ -17,8 +17,22 @@ security items in [SECURITY.md](SECURITY.md).
 
 ## Setup
 
-- MCP server (Python): `uv pip install -e .` then run `python -m android_use.server`.
+- MCP server (Python): `uv pip install -e ".[test]"` then run `python -m android_use.server`.
+- Tests: `pytest` — about 200 tests, no phone needed. Tools run against a fake
+  phone (`tests/conftest.py`), and the phone-app transport runs against a fake
+  bridge over real HTTP (`tests/test_app_backend.py`).
 - Companion app (Kotlin): open in Android Studio, or `./gradlew assembleDebug`.
+  CI builds the APK.
+
+## Changing the phone protocol
+
+The server and the phone app are released separately, so a phone may run an
+older app than the server expects. When you add a route or a field:
+
+1. Bump `PROTOCOL` in `HttpBridge.kt`.
+2. In `app_backend.py`, only use it when `self.protocol` is high enough
+   (`self._needs(2, "...")` gives the user a clear "update the app").
+3. Add a contract test in `tests/test_app_backend.py` pinning the path and body.
 
 ## Ground rules
 

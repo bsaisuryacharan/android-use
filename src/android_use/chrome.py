@@ -48,10 +48,13 @@ def _forward() -> None:
     cmd = [adb._require_adb()]
     if adb.SERIAL:
         cmd += ["-s", adb.SERIAL]
-    proc = subprocess.run(
-        cmd + ["forward", f"tcp:{LOCAL_PORT}", SOCKET],
-        capture_output=True, text=True, timeout=20,
-    )
+    try:
+        proc = subprocess.run(
+            cmd + ["forward", f"tcp:{LOCAL_PORT}", SOCKET],
+            capture_output=True, text=True, timeout=20,
+        )
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        raise ChromeError(f"Could not forward the DevTools port: {exc}") from exc
     if proc.returncode != 0:
         raise ChromeError(f"Could not forward the DevTools port: {proc.stderr.strip()}")
 
