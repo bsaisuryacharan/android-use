@@ -7,8 +7,15 @@
     "com.android.deskclock",
     "com.google.android.apps.maps",
     "com.google.android.contacts",
-    "com.google.android.apps.photos"
+    "com.google.android.apps.photos",
+    "com.anthropic.claude"
   ],
   "_allow_all_apps": "Set to true to disable the allowlist entirely. Not recommended: the phone probably has banking and payment apps on it.",
-  "allow_all_apps": false
+  "allow_all_apps": false,
+
+  "_confirm_risky_actions": "Taps that send, pay, delete, call or sign out are held back until repeated with confirm=True. Turning this off is not recommended.",
+  "confirm_risky_actions": true,
+
+  "_risky_words": "Extra words that make a tap count as risky, for apps that label things unusually or in another language.",
+  "risky_words": []
 }
