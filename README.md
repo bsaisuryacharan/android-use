@@ -1,6 +1,6 @@
 # Android Use
 
-[![M8ven Score](https://m8ven.ai/badge/mcp/bsaisuryacharan/android-use)](https://m8ven.ai/mcp/bsaisuryacharan/android-use?s=readme)
+[![M8ven Score](https://m8ven.ai/badge/mcp/bsaisuryacharan-android-use-llqdys)](https://m8ven.ai/mcp/bsaisuryacharan-android-use-llqdys?s=readme)
 
 **Computer-use for Android.** An [MCP](https://modelcontextprotocol.io) server
 that lets Claude *see and operate a real Android phone* — read the screen, tap,
